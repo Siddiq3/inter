@@ -45,3 +45,108 @@
     
     ]
 }
+import { StatusBar } from 'expo-status-bar';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+
+
+import OneSignal from 'react-native-onesignal';
+import { useEffect, useState, } from 'react';
+
+
+import { NavigationContainer } from '@react-navigation/native';
+import TabNavigation from './TabNavigation';
+import SignInScreen from './Signin';
+import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithCredential
+} from 'firebase/auth';
+
+import * as  Google from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
+import { auth } from './config/firebase';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+WebBrowser.maybeCompleteAuthSession();
+export default function App() {
+
+
+  const [userInfo, setUserInfo] = useState();
+  const [loading, setLoading] = useState(false);
+  const [request, response, promtAsync] = Google.useAuthRequest({
+    androidClientId: '866795558901-8nnfrpqei6ca8jq8sp2uqa1o6r87iio2.apps.googleusercontent.com'
+  });
+
+
+  const CheckLocalUser = async () => {
+    setLoading(true)
+    try {
+      const userJSON = await AsyncStorage.getItem('@user');
+      const userData = userJSON ? JSON.parse(userJSON) : null;
+      console.log('local storage', userData);
+      setUserInfo(userData);
+    }
+    catch (e) {
+      alert(e.message);
+    }
+    finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (response?.type == 'success') {
+      const { id_token } = response.params;
+      const credential = GoogleAuthProvider.credential(id_token);
+      signInWithCredential(auth, credential);
+    }
+  }, [response]);
+
+
+
+  useEffect(() => {
+    CheckLocalUser();
+    const unSub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        console.log(JSON.stringify(user, null, 2))
+        setUserInfo(user);
+        await AsyncStorage.setItem("@user", JSON.stringify(user));
+      }
+      else {
+        console.log('else')
+      }
+    });
+
+    return () => unSub();
+  }, []);
+
+
+  if (loading)
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size={'large'} />
+      </View>
+    );
+
+
+  return (
+    <NavigationContainer style={styles.container} >
+
+
+      {userInfo ? <TabNavigation /> : <SignInScreen promtAsync={promtAsync} />}
+
+    </NavigationContainer>
+
+  );
+
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
